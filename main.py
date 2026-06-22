@@ -1,0 +1,33 @@
+import asyncio
+import logging
+import os
+from aiogram import Bot, Dispatcher
+from aiogram.fsm.storage.memory import MemoryStorage
+
+from database.db import init_db
+from handlers import user_menu, deposit, withdraw, promo, admin, chat
+
+logging.basicConfig(level=logging.INFO)
+
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+
+
+async def main():
+    bot = Bot(token=BOT_TOKEN)
+    dp = Dispatcher(storage=MemoryStorage())
+
+    await init_db()
+
+    dp.include_router(user_menu.router)
+    dp.include_router(deposit.router)
+    dp.include_router(withdraw.router)
+    dp.include_router(promo.router)
+    dp.include_router(admin.router)
+    dp.include_router(chat.router)
+
+    print("✅ البوت شغال...")
+    await dp.start_polling(bot)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
