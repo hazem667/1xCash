@@ -2,17 +2,12 @@ from aiogram.fsm.state import State, StatesGroup
 
 
 class DepositStates(StatesGroup):
-    waiting_id = State()
-    waiting_photo = State()
-    waiting_phone = State()
+    in_flow = State()       # يسير خطوة خطوة
 
 
 class WithdrawStates(StatesGroup):
-    waiting_id = State()
-    waiting_code_step = State()   # عرض زرار تم / طلب مساعدة
-    waiting_code_value = State()  # إدخال الكود
-    waiting_amount = State()
-    waiting_method = State()
+    in_flow = State()       # يسير خطوة خطوة
+    waiting_code_step = State()  # شاشة "تم / طلب مساعدة"
 
 
 class AdminStates(StatesGroup):
@@ -23,6 +18,19 @@ class AdminStates(StatesGroup):
     waiting_edit_message_value = State()
     waiting_add_admin = State()
     chatting_with_user = State()
+    # تعديل أسماء الأزرار
+    waiting_button_label_key = State()
+    waiting_button_label_value = State()
+    # إضافة زرار مخصص
+    waiting_custom_btn_label = State()
+    waiting_custom_btn_url = State()
+    # تعديل خطوات الفلو
+    waiting_flow_step_question = State()
+    waiting_new_step_label = State()
+    waiting_new_step_question = State()
+    waiting_new_step_type = State()
+    # إعداد رابط Soon
+    waiting_soon_url = State()
 
 
 class LiveChatStates(StatesGroup):

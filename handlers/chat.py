@@ -1,49 +1,35 @@
 from aiogram import Router, types, F, Bot
 from aiogram.fsm.context import FSMContext
-
-from database.db import get_live_chat, delete_live_chat, is_admin, get_all_admins
+from database.db import get_live_chat, delete_live_chat, get_all_admins, is_admin
 from states.states import AdminStates
 
 router = Router()
 
 
-# ── رسائل العميل أثناء المحادثة المباشرة ─────────────────
+@router.message(AdminStates.chatting_with_user)
+async def admin_chat_send(message: types.Message, state: FSMContext, bot: Bot):
+    data = await state.get_data()
+    user_id = data.get("chatting_with")
+    if not user_id:
+        return
+    try:
+        await bot.copy_message(user_id, message.chat.id, message.message_id)
+    except Exception:
+        await message.answer("⚠️ لم يتمكن البوت من إرسال الرسالة.")
 
-@router.message(F.text & ~F.text.startswith("/"))
-async def relay_user_message(message: types.Message, bot: Bot, state: FSMContext):
-    user_id = message.from_user.id
 
-    # لو أدمن وشغال في شات
-    current_state = await state.get_state()
-    if current_state == AdminStates.chatting_with_user:
-        data = await state.get_data()
-        target_user = data.get("chatting_with")
-        if target_user:
-            try:
-                await bot.send_message(
-                    target_user,
-                    f"📨 *رسالة من الإدارة:*\n\n{message.text}",
-                    parse_mode="Markdown"
-                )
-                await message.answer("✅ تم الإرسال")
-            except Exception:
-                await message.answer("⚠️ تعذّر الإرسال للعميل.")
+@router.message(F.text)
+async def user_chat_relay(message: types.Message, bot: Bot):
+    """يحوّل رسائل المستخدم للأدمن لو في محادثة نشطة"""
+    if await is_admin(message.from_user.id):
+        return
+    chat = await get_live_chat(message.from_user.id)
+    if not chat or chat[1] != "active":
         return
 
-    # لو مستخدم عادي وعنده شات نشط
-    if await is_admin(user_id):
-        return
-
-    chat = await get_live_chat(user_id)
-    if chat and chat[1] == "active":
-        admins = await get_all_admins()
-        username = f"@{message.from_user.username}" if message.from_user.username else message.from_user.full_name
-        for admin_id in admins:
-            try:
-                await bot.send_message(
-                    admin_id,
-                    f"💬 *رسالة من العميل* {username} (`{user_id}`):\n\n{message.text}",
-                    parse_mode="Markdown"
-                )
-            except Exception:
-                pass
+    admins = await get_all_admins()
+    for admin_id in admins:
+        try:
+            await bot.copy_message(admin_id, message.chat.id, message.message_id)
+        except Exception:
+            pass

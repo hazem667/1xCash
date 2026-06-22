@@ -18,12 +18,13 @@ async def main():
 
     await init_db()
 
-    dp.include_router(user_menu.router)
+    # الترتيب مهم - admin قبل user_menu عشان الستيتس
+    dp.include_router(admin.router)
     dp.include_router(deposit.router)
     dp.include_router(withdraw.router)
     dp.include_router(promo.router)
-    dp.include_router(admin.router)
     dp.include_router(chat.router)
+    dp.include_router(user_menu.router)
 
     print("✅ البوت شغال...")
     await dp.start_polling(bot)
