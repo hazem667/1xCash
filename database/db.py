@@ -3,6 +3,9 @@ import os
 
 DB_PATH = "data/bot.db"
 
+# إنشاء مجلد data تلقائياً لو مش موجود
+os.makedirs("data", exist_ok=True)
+
 
 async def init_db():
     async with aiosqlite.connect(DB_PATH) as db:
