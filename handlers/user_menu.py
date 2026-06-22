@@ -2,7 +2,10 @@ from aiogram import Router, types, F
 from aiogram.filters import CommandStart, Command
 from aiogram.fsm.context import FSMContext
 
-from database.db import register_user, get_message, get_setting, is_admin, get_custom_buttons, get_button_label
+from database.db import (
+    register_user, get_message, get_setting, is_admin,
+    get_custom_buttons, get_button_label
+)
 from handlers.keyboards import main_menu_keyboard, admin_menu_keyboard
 
 router = Router()
@@ -11,7 +14,11 @@ router = Router()
 @router.message(CommandStart())
 async def cmd_start(message: types.Message, state: FSMContext):
     await state.clear()
-    await register_user(message.from_user.id, message.from_user.username, message.from_user.full_name)
+    await register_user(
+        message.from_user.id,
+        message.from_user.username,
+        message.from_user.full_name
+    )
 
     maintenance = await get_setting("maintenance_mode")
     if maintenance == "1" and not await is_admin(message.from_user.id):
@@ -19,7 +26,10 @@ async def cmd_start(message: types.Message, state: FSMContext):
         return
 
     if await is_admin(message.from_user.id):
-        await message.answer("👋 مرحبًا بك في لوحة الإدارة!", reply_markup=admin_menu_keyboard())
+        await message.answer(
+            "👋 مرحبًا بك في لوحة الإدارة!",
+            reply_markup=admin_menu_keyboard()
+        )
         return
 
     welcome_text = await get_message("welcome")

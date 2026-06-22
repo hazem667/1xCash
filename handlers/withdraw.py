@@ -1,12 +1,10 @@
-import json
 from aiogram import Router, types, F, Bot
 from aiogram.fsm.context import FSMContext
 
 from database.db import (
     get_message, get_setting, create_withdraw_order,
     get_withdraw_order, update_withdraw_status,
-    get_all_admins, set_live_chat, delete_live_chat,
-    log_action, get_flow_steps, is_admin
+    get_all_admins, set_live_chat, delete_live_chat, log_action, is_admin
 )
 from handlers.keyboards import (
     cancel_keyboard, main_menu_keyboard,
@@ -32,6 +30,7 @@ async def withdraw_start(message: types.Message, state: FSMContext):
 
 async def _withdraw_start(message: types.Message, state: FSMContext):
     await state.clear()
+
     maint = await get_setting("maintenance_mode")
     if maint == "1" and not await is_admin(message.from_user.id):
         await message.answer("🔧 البوت في وضع الصيانة حالياً، برجاء المحاولة لاحقًا.")
@@ -43,38 +42,34 @@ async def _withdraw_start(message: types.Message, state: FSMContext):
         return
 
     intro = await get_message("withdraw_intro")
-    steps = await get_flow_steps("withdraw")
-    if not steps:
-        await message.answer("⚠️ لا توجد خطوات للسحب.")
+    await message.answer(intro, reply_markup=cancel_keyboard("🔙 القائمة الرئيسية"), parse_mode="Markdown")
+
+    ask_id = await get_message("withdraw_ask_id")
+    await message.answer(ask_id, reply_markup=cancel_keyboard())
+    await state.set_state(WithdrawStates.waiting_id)
+
+
+@router.message(WithdrawStates.waiting_id)
+async def withdraw_get_id(message: types.Message, state: FSMContext):
+    if message.text in ("❌ إلغاء", "🔙 القائمة الرئيسية"):
+        await state.clear()
+        welcome = await get_message("welcome")
+        kb = await main_menu_keyboard()
+        await message.answer(welcome, reply_markup=kb, parse_mode="Markdown")
         return
 
-    await state.set_state(WithdrawStates.in_flow)
-    await state.update_data(step_index=0, responses={}, steps=[list(s) for s in steps])
+    if not message.text or not message.text.strip().isdigit():
+        await message.answer("⚠️ الرجاء إدخال أرقام فقط.")
+        return
 
-    await message.answer(intro, parse_mode="Markdown")
-    await ask_withdraw_step(message, state)
-
-
-async def ask_withdraw_step(message: types.Message, state: FSMContext):
-    data = await state.get_data()
-    steps = data["steps"]
-    idx = data["step_index"]
-
-    if idx >= len(steps):
-        return  # سيتم الإنهاء من الهاندلر
-
-    step = steps[idx]
-    step_id, order, label, question, answer_type, validation, options, is_photo, is_info_message, info_text = step
-
-    if answer_type == "code_wait":
-        await message.answer(question, reply_markup=withdraw_code_keyboard(), parse_mode="Markdown")
-        await state.set_state(WithdrawStates.waiting_code_step)
-    else:
-        await message.answer(question, reply_markup=cancel_keyboard())
+    await state.update_data(account_id=message.text.strip())
+    ask_code = await get_message("withdraw_ask_code")
+    await message.answer(ask_code, reply_markup=withdraw_code_keyboard(), parse_mode="Markdown")
+    await state.set_state(WithdrawStates.waiting_code_step)
 
 
 @router.message(WithdrawStates.waiting_code_step)
-async def withdraw_code_step_handler(message: types.Message, state: FSMContext, bot: Bot):
+async def withdraw_code_step(message: types.Message, state: FSMContext, bot: Bot):
     if message.text == "🔙 القائمة الرئيسية":
         await state.clear()
         welcome = await get_message("welcome")
@@ -86,19 +81,22 @@ async def withdraw_code_step_handler(message: types.Message, state: FSMContext, 
         user = message.from_user
         mention = make_mention(user)
         data = await state.get_data()
-        responses = data.get("responses", {})
-        details = "\n".join([f"• {k}: {v}" for k, v in responses.items()])
+        account_id = data.get("account_id", "غير محدد")
 
         admin_text = (
             f"🆘 *طلب مساعدة في السحب*\n\n"
             f"👤 المستخدم: {mention}\n"
             f"🆔 Telegram ID: `{user.id}`\n"
-            f"{details}"
+            f"💠 ID الحساب: `{account_id}`"
         )
         admins = await get_all_admins()
         for admin_id in admins:
             try:
-                await bot.send_message(admin_id, admin_text, reply_markup=help_request_keyboard(user.id), parse_mode="Markdown")
+                await bot.send_message(
+                    admin_id, admin_text,
+                    reply_markup=help_request_keyboard(user.id),
+                    parse_mode="Markdown"
+                )
             except Exception:
                 pass
 
@@ -109,84 +107,99 @@ async def withdraw_code_step_handler(message: types.Message, state: FSMContext, 
         return
 
     if message.text == "✅ تم الحصول على الكود":
-        data = await state.get_data()
-        steps = data["steps"]
-        idx = data["step_index"]
-        await state.update_data(step_index=idx + 1)
-        await state.set_state(WithdrawStates.in_flow)
-        await ask_withdraw_step(message, state)
+        ask_code_val = await get_message("withdraw_ask_code_value")
+        await message.answer(ask_code_val, reply_markup=cancel_keyboard())
+        await state.set_state(WithdrawStates.waiting_code_value)
         return
 
     await message.answer("⚠️ الرجاء اختيار أحد الأزرار.")
 
 
-@router.message(WithdrawStates.in_flow)
-async def withdraw_flow_handler(message: types.Message, state: FSMContext, bot: Bot):
-    if message.text in ("❌ إلغاء", "🔙 القائمة الرئيسية"):
+@router.message(WithdrawStates.waiting_code_value)
+async def withdraw_get_code(message: types.Message, state: FSMContext):
+    if message.text == "❌ إلغاء":
         await state.clear()
         welcome = await get_message("welcome")
         kb = await main_menu_keyboard()
         await message.answer(welcome, reply_markup=kb, parse_mode="Markdown")
         return
 
-    data = await state.get_data()
-    steps = data["steps"]
-    idx = data["step_index"]
-    responses = data.get("responses", {})
-
-    if idx >= len(steps):
-        await finish_withdraw(message, state, bot)
+    if not message.text or not message.text.strip():
+        await message.answer("⚠️ الرجاء إدخال الكود.")
         return
 
-    step = steps[idx]
-    step_id, order, label, question, answer_type, validation, options, is_photo, is_info_message, info_text = step
+    await state.update_data(code=message.text.strip())
+    ask_amount = await get_message("withdraw_ask_amount")
+    await message.answer(ask_amount, reply_markup=cancel_keyboard())
+    await state.set_state(WithdrawStates.waiting_amount)
 
-    if not message.text:
+
+@router.message(WithdrawStates.waiting_amount)
+async def withdraw_get_amount(message: types.Message, state: FSMContext):
+    if message.text == "❌ إلغاء":
+        await state.clear()
+        welcome = await get_message("welcome")
+        kb = await main_menu_keyboard()
+        await message.answer(welcome, reply_markup=kb, parse_mode="Markdown")
         return
 
-    val = message.text.strip()
-    if validation == "digits" and not val.isdigit():
+    if not message.text or not message.text.strip().isdigit():
         await message.answer("⚠️ الرجاء إدخال أرقام فقط.")
         return
 
-    responses[label] = val
-    await state.update_data(responses=responses, step_index=idx + 1)
-
-    next_idx = idx + 1
-    if next_idx >= len(steps):
-        await finish_withdraw(message, state, bot)
-    else:
-        await ask_withdraw_step(message, state)
+    await state.update_data(amount=message.text.strip())
+    ask_method = await get_message("withdraw_ask_method")
+    await message.answer(ask_method, reply_markup=cancel_keyboard())
+    await state.set_state(WithdrawStates.waiting_method)
 
 
-async def finish_withdraw(message: types.Message, state: FSMContext, bot: Bot):
+@router.message(WithdrawStates.waiting_method)
+async def withdraw_get_method(message: types.Message, state: FSMContext, bot: Bot):
+    if message.text == "❌ إلغاء":
+        await state.clear()
+        welcome = await get_message("welcome")
+        kb = await main_menu_keyboard()
+        await message.answer(welcome, reply_markup=kb, parse_mode="Markdown")
+        return
+
+    if not message.text or not message.text.strip():
+        await message.answer("⚠️ الرجاء إدخال طريقة الاستلام.")
+        return
+
     data = await state.get_data()
-    responses = data.get("responses", {})
     user = message.from_user
     mention = make_mention(user)
 
     order_id = await create_withdraw_order(
         user_id=user.id,
         username=mention,
-        responses=responses
+        account_id=data["account_id"],
+        code=data["code"],
+        amount=data["amount"],
+        method=message.text.strip()
     )
 
     now = datetime.now()
-    details_text = "\n".join([f"• {k}: {v}" for k, v in responses.items()])
-
     admin_text = (
         f"💸 *طلب سحب جديد*\n\n"
         f"Order #{order_id}\n\n"
         f"👤 المستخدم: {mention}\n"
-        f"🆔 Telegram ID: `{user.id}`\n\n"
-        f"{details_text}\n"
+        f"🆔 Telegram ID: `{user.id}`\n"
+        f"💠 ID الحساب: `{data['account_id']}`\n"
+        f"🔑 كود السحب: `{data['code']}`\n"
+        f"💰 المبلغ: {data['amount']} جنيه\n"
+        f"💳 طريقة الاستلام: {message.text.strip()}\n"
         f"🕒 الوقت: {now.strftime('%Y/%m/%d - %I:%M %p')}"
     )
 
     admins = await get_all_admins()
     for admin_id in admins:
         try:
-            await bot.send_message(admin_id, admin_text, reply_markup=withdraw_admin_keyboard(order_id), parse_mode="Markdown")
+            await bot.send_message(
+                admin_id, admin_text,
+                reply_markup=withdraw_admin_keyboard(order_id),
+                parse_mode="Markdown"
+            )
         except Exception:
             pass
 
@@ -197,7 +210,7 @@ async def finish_withdraw(message: types.Message, state: FSMContext, bot: Bot):
     await log_action("withdraw_created", user.id, order_id, f"order#{order_id}")
 
 
-# ── Callbacks ─────────────────────────────────────────────
+# ── Callbacks للأدمن ──────────────────────────────────────
 
 @router.callback_query(F.data.startswith("wit_success:"))
 async def wit_success(callback: types.CallbackQuery, bot: Bot):
@@ -208,9 +221,19 @@ async def wit_success(callback: types.CallbackQuery, bot: Bot):
         return
 
     user_id = order[1]
+    account_id = order[3]
+    amount = order[5]
+    method = order[6]
     now = datetime.now()
+
     template = await get_message("withdraw_success")
-    user_text = template.format(date=now.strftime('%d/%m/%Y'), time=now.strftime('%I:%M %p'))
+    user_text = template.format(
+        account_id=account_id,
+        amount=amount,
+        method=method,
+        date=now.strftime('%d/%m/%Y'),
+        time=now.strftime('%I:%M %p')
+    )
 
     try:
         await bot.send_message(user_id, user_text)
@@ -219,7 +242,10 @@ async def wit_success(callback: types.CallbackQuery, bot: Bot):
 
     await update_withdraw_status(order_id, "accepted")
     try:
-        await callback.message.edit_text(callback.message.text + "\n\n✅ *تمت الموافقة*", parse_mode="Markdown")
+        await callback.message.edit_text(
+            callback.message.text + "\n\n✅ *تمت الموافقة*",
+            parse_mode="Markdown"
+        )
     except Exception:
         pass
     await callback.answer("تمت الموافقة")
@@ -234,9 +260,15 @@ async def wit_reject(callback: types.CallbackQuery, bot: Bot):
         return
 
     user_id = order[1]
+    account_id = order[3]
     now = datetime.now()
+
     template = await get_message("withdraw_rejected")
-    user_text = template.format(date=now.strftime('%d/%m/%Y'), time=now.strftime('%I:%M %p'))
+    user_text = template.format(
+        account_id=account_id,
+        date=now.strftime('%d/%m/%Y'),
+        time=now.strftime('%I:%M %p')
+    )
 
     try:
         await bot.send_message(user_id, user_text)
@@ -245,7 +277,10 @@ async def wit_reject(callback: types.CallbackQuery, bot: Bot):
 
     await update_withdraw_status(order_id, "rejected")
     try:
-        await callback.message.edit_text(callback.message.text + "\n\n❌ *تم الرفض*", parse_mode="Markdown")
+        await callback.message.edit_text(
+            callback.message.text + "\n\n❌ *تم الرفض*",
+            parse_mode="Markdown"
+        )
     except Exception:
         pass
     await callback.answer("تم الرفض")
@@ -269,15 +304,23 @@ async def wit_reply(callback: types.CallbackQuery, state: FSMContext):
 async def chat_start(callback: types.CallbackQuery, bot: Bot, state: FSMContext):
     user_id = int(callback.data.split(":")[1])
     await set_live_chat(user_id, "active", "withdraw_help")
+
     connected_msg = await get_message("admin_connected")
     try:
         await bot.send_message(user_id, connected_msg)
     except Exception:
         pass
+
     await state.update_data(chatting_with=user_id)
     await state.set_state(AdminStates.chatting_with_user)
-    await callback.message.edit_reply_markup(reply_markup=withdraw_help_result_keyboard(user_id))
-    await callback.message.answer(f"💬 أنت الآن متصل بالعميل `{user_id}`\nكل ما تكتبه سيصله مباشرة.", parse_mode="Markdown")
+
+    await callback.message.edit_reply_markup(
+        reply_markup=withdraw_help_result_keyboard(user_id)
+    )
+    await callback.message.answer(
+        f"💬 أنت الآن متصل بالعميل `{user_id}`\nكل ما تكتبه سيصله مباشرة.",
+        parse_mode="Markdown"
+    )
     await callback.answer()
 
 
@@ -296,8 +339,13 @@ async def wit_help_success(callback: types.CallbackQuery, bot: Bot, state: FSMCo
     await state.clear()
     await delete_live_chat(user_id)
     try:
-        template = await get_message("withdraw_success")
-        await bot.send_message(user_id, template.format(date=now.strftime('%d/%m/%Y'), time=now.strftime('%I:%M %p')))
+        await bot.send_message(
+            user_id,
+            f"✅ تمت عملية السحب بنجاح!\n"
+            f"🕒 التاريخ: {now.strftime('%d/%m/%Y')}\n"
+            f"⏰ الوقت: {now.strftime('%I:%M %p')}\n\n"
+            f"نشكر ثقتك بنا 💙"
+        )
     except Exception:
         pass
     await callback.message.edit_reply_markup(reply_markup=None)
@@ -312,8 +360,12 @@ async def wit_help_reject(callback: types.CallbackQuery, bot: Bot, state: FSMCon
     await state.clear()
     await delete_live_chat(user_id)
     try:
-        template = await get_message("withdraw_rejected")
-        await bot.send_message(user_id, template.format(date=now.strftime('%d/%m/%Y'), time=now.strftime('%I:%M %p')))
+        await bot.send_message(
+            user_id,
+            f"❌ عذرًا، تم رفض عملية السحب.\n"
+            f"🕒 التاريخ: {now.strftime('%d/%m/%Y')}\n\n"
+            f"للاستفسار تواصل مع الإدارة: @z7yzf"
+        )
     except Exception:
         pass
     await callback.message.edit_reply_markup(reply_markup=None)

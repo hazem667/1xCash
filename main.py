@@ -18,10 +18,10 @@ async def main():
 
     await init_db()
 
-    # الترتيب مهم جداً:
-    # 1. user_menu أول عشان /start يشتغل فوراً
-    # 2. admin, deposit, withdraw, promo للستيتس والأزرار الثابتة
-    # 3. chat آخر حاجة للأزرار الديناميكية
+    # الترتيب مهم:
+    # user_menu أول → /start يشتغل فوراً
+    # admin, deposit, withdraw, promo → بالترتيب
+    # chat آخر حاجة → يمسك أي رسالة تانية
     dp.include_router(user_menu.router)
     dp.include_router(admin.router)
     dp.include_router(deposit.router)
@@ -29,7 +29,7 @@ async def main():
     dp.include_router(promo.router)
     dp.include_router(chat.router)
 
-    print("✅ البوت شغال...")
+    print("✅ 1xCash Bot شغال...")
     await dp.start_polling(bot)
 
 
