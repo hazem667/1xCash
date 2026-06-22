@@ -49,22 +49,3 @@ async def back_to_main(message: types.Message, state: FSMContext):
     welcome_text = await get_message("welcome")
     kb = await main_menu_keyboard()
     await message.answer(welcome_text, reply_markup=kb, parse_mode="Markdown")
-
-
-@router.message(F.text)
-async def handle_custom_link_buttons(message: types.Message, state: FSMContext):
-    """يتعامل مع الأزرار المخصصة (لينكات) والزرار Soon"""
-    soon_label = await get_button_label("soon")
-    soon_url = await get_setting("soon_url")
-
-    if message.text == soon_label and soon_url:
-        await message.answer(f"🔜 {message.text}\n\n{soon_url}")
-        return
-
-    # الأزرار المخصصة
-    custom = await get_custom_buttons()
-    for btn in custom:
-        btn_id, label, btn_type, url, position = btn
-        if message.text == label:
-            await message.answer(f"🔗 {label}\n\n{url}")
-            return

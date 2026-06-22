@@ -5,7 +5,7 @@ from aiogram.fsm.context import FSMContext
 from database.db import (
     get_message, get_setting, create_deposit_order,
     get_deposit_order, update_deposit_status,
-    get_all_admins, log_action, get_flow_steps
+    get_all_admins, log_action, get_flow_steps, get_button_label
 )
 from handlers.keyboards import (
     deposit_intro_keyboard, cancel_keyboard,
@@ -26,35 +26,7 @@ def make_mention(user):
 
 @router.message(F.text == "💵 إيداع")
 async def deposit_start(message: types.Message, state: FSMContext):
-    # نتحقق من اسم الزرار الديناميكي
     await _deposit_start(message, state)
-
-
-async def _check_deposit_btn(text, state):
-    from database.db import get_button_label
-    dep_label = await get_button_label("deposit")
-    return text == dep_label
-
-
-@router.message(F.text)
-async def check_dynamic_deposit(message: types.Message, state: FSMContext):
-    from database.db import get_button_label, get_setting as gs
-    dep_label = await get_button_label("deposit")
-    wit_label = await get_button_label("withdraw")
-    promo_label = await get_button_label("promo")
-    soon_label = await get_button_label("soon")
-    soon_url = await gs("soon_url")
-
-    if message.text == dep_label and dep_label != "💵 إيداع":
-        await _deposit_start(message, state)
-    elif message.text == wit_label and wit_label != "💸 سحب":
-        from handlers.withdraw import _withdraw_start
-        await _withdraw_start(message, state)
-    elif message.text == promo_label and promo_label != "🎟 برومو كود":
-        from handlers.promo import send_promo
-        await send_promo(message, state)
-    elif message.text == soon_label and soon_url:
-        await message.answer(f"🔜 قريبًا!\n{soon_url}")
 
 
 async def _deposit_start(message: types.Message, state: FSMContext):
@@ -98,21 +70,16 @@ async def ask_step(message: types.Message, state: FSMContext):
         return
 
     step = steps[idx]
-    # step: [id, order, label, question, answer_type, validation, options, is_photo, is_info_message, info_text]
     step_id, order, label, question, answer_type, validation, options, is_photo, is_info_message, info_text = step
 
     if is_info_message:
-        # رسالة معلومات - تُعرض وتنتقل للخطوة التالية تلقائياً
         info = await get_message("transfer_info")
         await message.answer(info, reply_markup=deposit_send_keyboard())
         await state.update_data(step_index=idx + 1)
         # ننتظر المستخدم يضغط إرسال
         return
 
-    if is_photo:
-        await message.answer(question, reply_markup=cancel_keyboard())
-    else:
-        await message.answer(question, reply_markup=cancel_keyboard())
+    await message.answer(question, reply_markup=cancel_keyboard())
 
 
 @router.message(DepositStates.in_flow)
@@ -136,9 +103,8 @@ async def deposit_flow_handler(message: types.Message, state: FSMContext, bot: B
     step = steps[idx]
     step_id, order, label, question, answer_type, validation, options, is_photo, is_info_message, info_text = step
 
-    # لو في مرحلة رسالة المعلومات وضغط إرسال
+    # لو المستخدم ضغط إرسال بعد رسالة المعلومات
     if message.text == "✅ إرسال":
-        await state.update_data(step_index=idx)
         await ask_step(message, state)
         return
 
@@ -154,7 +120,6 @@ async def deposit_flow_handler(message: types.Message, state: FSMContext, bot: B
             return
         val = message.text.strip()
 
-        # التحقق من الشرط
         if validation == "digits" and not val.isdigit():
             await message.answer("⚠️ الرجاء إدخال أرقام فقط.")
             return
