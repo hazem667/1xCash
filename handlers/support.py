@@ -1,4 +1,5 @@
-from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, ChatAction
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
+from telegram.constants import ChatAction
 from telegram.ext import (
     ContextTypes, ConversationHandler,
     MessageHandler, CallbackQueryHandler, filters, CommandHandler
