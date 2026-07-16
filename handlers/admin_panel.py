@@ -162,7 +162,8 @@ MESSAGE_KEYS = [
 
 
 async def edit_messages_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    if not await is_admin(update.effective_user.id):
+    if not await is_owner(update.effective_user.id):
+        await update.message.reply_text("⛔ هذه الميزة للمالك فقط.")
         return
     btns = []
     for key, label in MESSAGE_KEYS:
@@ -214,7 +215,8 @@ BUTTON_KEYS = [
 
 
 async def manage_buttons_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    if not await is_admin(update.effective_user.id):
+    if not await is_owner(update.effective_user.id):
+        await update.message.reply_text("⛔ هذه الميزة للمالك فقط.")
         return
     labels = await get_all_button_labels()
     custom = await get_custom_buttons()
