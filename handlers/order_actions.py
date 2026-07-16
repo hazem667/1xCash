@@ -65,7 +65,7 @@ async def order_accept(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("⚠️ الطلب غير موجود.")
         return
 
-    if order[7] != "pending":
+    if order[8] not in ("pending", "active"):
         await query.edit_message_text("⚠️ تم تنفيذ هذا الطلب بالفعل.")
         return
 
@@ -123,7 +123,7 @@ async def order_skip(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     order_id = int(parts[1])
 
     order = await get_order(order_id)
-    if not order or order[7] != "pending":
+    if not order or order[8] not in ("pending", "active"):
         return
 
     await skip_order(order_id, admin.id)
