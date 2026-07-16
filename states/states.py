@@ -1,34 +1,37 @@
-from aiogram.fsm.state import State, StatesGroup
+from telegram.ext import ConversationHandler
 
+# ══════════════════════════════════════════════
+# DEPOSIT STATES
+# ══════════════════════════════════════════════
+DEP_PLATFORM   = 0
+DEP_ACCOUNT_ID = 1
+DEP_AMOUNT     = 2
+DEP_CONFIRM    = 3
 
-class DepositStates(StatesGroup):
-    waiting_id = State()
-    waiting_amount = State()
-    waiting_send_confirm = State()
-    waiting_photo = State()
-    waiting_phone = State()
+# ══════════════════════════════════════════════
+# WITHDRAW STATES
+# ══════════════════════════════════════════════
+WIT_PLATFORM = 10
+WIT_AMOUNT   = 11
+WIT_CONFIRM  = 12
 
+# ══════════════════════════════════════════════
+# SUPPORT STATES
+# ══════════════════════════════════════════════
+SUP_REASON = 20
 
-class WithdrawStates(StatesGroup):
-    waiting_id = State()
-    waiting_code_step = State()
-    waiting_code_value = State()
-    waiting_amount = State()
-    waiting_method = State()
-
-
-class AdminStates(StatesGroup):
-    waiting_deposit_amount = State()
-    waiting_reply_message = State()
-    waiting_broadcast = State()
-    waiting_edit_message_value = State()
-    waiting_add_admin = State()
-    chatting_with_user = State()
-    waiting_button_label = State()
-    waiting_custom_btn_label = State()
-    waiting_custom_btn_url = State()
-    waiting_soon_url = State()
-
-
-class LiveChatStates(StatesGroup):
-    in_chat = State()
+# ══════════════════════════════════════════════
+# ADMIN STATES
+# ══════════════════════════════════════════════
+ADM_BROADCAST         = 30
+ADM_EDIT_MSG_KEY      = 31
+ADM_EDIT_MSG_VAL      = 32
+ADM_EDIT_BTN_KEY      = 33
+ADM_EDIT_BTN_VAL      = 34
+ADM_ADD_ADMIN         = 35
+ADM_REMOVE_ADMIN      = 36
+ADM_REJECT_REASON     = 37
+ADM_ADD_CUSTOM_LABEL  = 38
+ADM_ADD_CUSTOM_URL    = 39
+ADM_EDIT_SETTING_KEY  = 40
+ADM_EDIT_SETTING_VAL  = 41

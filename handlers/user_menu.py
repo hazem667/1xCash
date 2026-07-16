@@ -1,61 +1,65 @@
-from aiogram import Router, types, F
-from aiogram.filters import CommandStart, Command
-from aiogram.fsm.context import FSMContext
+from telegram import Update
+from telegram.ext import ContextTypes, CommandHandler, MessageHandler, filters, ConversationHandler
 
 from database.db import (
     register_user, get_message, get_setting, is_admin,
-    get_custom_buttons, get_button_label
+    get_button_label, get_custom_buttons
 )
-from handlers.keyboards import main_menu_keyboard, admin_menu_keyboard
+from handlers.keyboards import main_menu_kb, admin_menu_kb, proofs_inline_kb
+from handlers.utils import make_mention
 
-router = Router()
 
+async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    await register_user(user.id, user.username, user.full_name)
 
-@router.message(CommandStart())
-async def cmd_start(message: types.Message, state: FSMContext):
-    await state.clear()
-    await register_user(
-        message.from_user.id,
-        message.from_user.username,
-        message.from_user.full_name
-    )
-
-    maintenance = await get_setting("maintenance_mode")
-    if maintenance == "1" and not await is_admin(message.from_user.id):
-        await message.answer("🔧 البوت في وضع الصيانة حالياً، برجاء المحاولة لاحقًا.")
+    if await get_setting("maintenance_mode") == "1" and not await is_admin(user.id):
+        await update.message.reply_text("🔧 البوت في وضع الصيانة حالياً، يرجى المحاولة لاحقًا.")
         return
 
-    if await is_admin(message.from_user.id):
-        await message.answer(
-            "👋 مرحبًا بك في لوحة الإدارة!",
-            reply_markup=admin_menu_keyboard()
+    if await is_admin(user.id):
+        await update.message.reply_text(
+            "👑 مرحبًا بك في لوحة الإدارة!",
+            reply_markup=admin_menu_kb()
         )
         return
 
-    welcome_text = await get_message("welcome")
-    kb = await main_menu_keyboard()
-    await message.answer(welcome_text, reply_markup=kb, parse_mode="Markdown")
+    welcome = await get_message("welcome")
+    kb = await main_menu_kb()
+    await update.message.reply_text(welcome, reply_markup=kb)
 
 
-@router.message(Command("admin"))
-async def cmd_admin(message: types.Message, state: FSMContext):
-    if not await is_admin(message.from_user.id):
+async def handle_proofs(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    label = await get_button_label("proofs")
+    if update.message.text != label:
         return
-    await state.clear()
-    await message.answer("🛠 لوحة الإدارة", reply_markup=admin_menu_keyboard())
+    kb = await proofs_inline_kb()
+    await update.message.reply_text("📋 جروب الإثباتات:", reply_markup=kb)
 
 
-@router.message(F.text == "🚪 خروج من الإدارة")
-async def exit_admin(message: types.Message, state: FSMContext):
-    await state.clear()
-    welcome_text = await get_message("welcome")
-    kb = await main_menu_keyboard()
-    await message.answer(welcome_text, reply_markup=kb, parse_mode="Markdown")
+async def handle_tote(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    label = await get_button_label("tote")
+    if update.message.text != label:
+        return
+    msg = await get_message("tote")
+    await update.message.reply_text(msg)
 
 
-@router.message(F.text == "🔙 القائمة الرئيسية")
-async def back_to_main(message: types.Message, state: FSMContext):
-    await state.clear()
-    welcome_text = await get_message("welcome")
-    kb = await main_menu_keyboard()
-    await message.answer(welcome_text, reply_markup=kb, parse_mode="Markdown")
+async def handle_custom_buttons(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text
+    custom = await get_custom_buttons()
+    for btn in custom:
+        if text == btn[1]:
+            await update.message.reply_text(
+                f"🔗 {btn[1]}",
+                reply_markup=__import__('telegram').InlineKeyboardMarkup([
+                    [__import__('telegram').InlineKeyboardButton(btn[1], url=btn[2])]
+                ])
+            )
+            return
+
+
+def get_handlers():
+    return [
+        CommandHandler("start", cmd_start),
+    ]
