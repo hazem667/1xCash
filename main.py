@@ -30,26 +30,29 @@ def main():
     )
 
     # ── الترتيب مهم جداً ──────────────────────────
-    # group=0 : Admin panel (أعلى أولوية)
+    # group=0 : Relay chat (أعلى أولوية — قبل كل حاجة)
+    app.add_handler(order_actions.get_relay_handler(), group=0)
+
+    # group=1 : Admin panel
     for h in admin_panel.get_handlers():
-        app.add_handler(h, group=0)
+        app.add_handler(h, group=1)
 
-    # group=1 : Conversations (deposit / withdraw / support)
-    app.add_handler(deposit.get_handler(), group=1)
-    app.add_handler(withdraw.get_handler(), group=1)
-    app.add_handler(support.get_handler(), group=1)
+    # group=2 : Conversations (deposit / withdraw / support)
+    app.add_handler(deposit.get_handler(), group=2)
+    app.add_handler(withdraw.get_handler(), group=2)
+    app.add_handler(support.get_handler(), group=2)
 
-    # group=2 : Order actions callbacks + relay chat
+    # group=3 : Order actions callbacks
     for h in order_actions.get_handlers():
-        app.add_handler(h, group=2)
-
-    # group=3 : My operations pagination
-    for h in myops.get_handlers():
         app.add_handler(h, group=3)
 
-    # group=4 : User menu — الراوتر الرئيسي + /start
-    for h in user_menu.get_handlers():
+    # group=4 : My operations pagination
+    for h in myops.get_handlers():
         app.add_handler(h, group=4)
+
+    # group=5 : User menu
+    for h in user_menu.get_handlers():
+        app.add_handler(h, group=5)
 
     logger.info("✅ البوت شغال...")
     app.run_polling(drop_pending_updates=True)
