@@ -28,10 +28,10 @@ def _accepted_text_for_admins(order, admin_mention: str) -> str:
     otype = "إيداع" if order[1] == "deposit" else "سحب"
     return (
         f"🔵 *طلب {otype} قيد التنفيذ*\n\n"
-        f"👤 المستخدم: {order[5]}\n"
-        f"🆔 Telegram ID: `{order[4]}`\n\n"
+        f"👤 المستخدم: {order[6]}\n"
+        f"🆔 Telegram ID: `{order[5]}`\n\n"
         f"✳️ الزر: {order[2]}\n"
-        f"💶 المبلغ: {order[3]}\n\n"
+        f"💶 المبلغ: {order[4]}\n\n"
         f"👨🏻‍💼 المشرف المسؤول: {admin_mention}"
     )
 
@@ -94,7 +94,7 @@ async def order_accept(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             pass
 
     # فتح محادثة مع المستخدم
-    user_id = order[4]
+    user_id = order[5]
     await start_chat(user_id, admin.id, order_id, order[1])
 
     accepted_msg = await get_message("admin_accepted_user")
@@ -160,7 +160,7 @@ async def order_done(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         return
 
     await update_order(order_id, status="completed", accepted_by=admin.id)
-    user_id = order[4]
+    user_id = order[5]
     otype = "إيداع" if order[1] == "deposit" else "سحب"
     icon = "📥" if order[1] == "deposit" else "📤"
 
@@ -168,9 +168,9 @@ async def order_done(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     result_text = (
         f"🟢 *عملية {otype} مكتملة*\n\n"
         f"✳️ الزر المختار: {order[2]}\n"
-        f"👤 اللاعب: {order[5]}\n"
+        f"👤 اللاعب: {order[6]}\n"
         f"🆔 Telegram ID: `{user_id}`\n"
-        f"💶 المبلغ: {order[3]}\n"
+        f"💶 المبلغ: {order[4]}\n"
         f"👨🏻‍💼 المشرف: {admin_mention}\n\n"
         f"🕒 {date_str} - {time_str}"
     )
@@ -250,14 +250,14 @@ async def order_reject_reason(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         order = await get_order(order_id)
         if order:
             await update_order(order_id, status="rejected", reject_reason=reason, accepted_by=admin.id)
-            user_id = order[4]
+            user_id = order[5]
             otype = "إيداع" if order[1] == "deposit" else "سحب"
             result_text = (
                 f"🔴 *عملية {otype} غير مكتملة*\n\n"
                 f"✳️ الزر المختار: {order[2]}\n"
-                f"👤 اللاعب: {order[5]}\n"
+                f"👤 اللاعب: {order[6]}\n"
                 f"🆔 Telegram ID: `{user_id}`\n"
-                f"💶 المبلغ: {order[3]}\n"
+                f"💶 المبلغ: {order[4]}\n"
                 f"📃 السبب: {reason}\n"
                 f"👨🏻‍💼 المشرف: {admin_mention}\n\n"
                 f"🕒 {date_str} - {time_str}"
@@ -437,5 +437,8 @@ def get_handlers():
         CallbackQueryHandler(sup_skip,     pattern=r"^sup_skip:\d+$"),
         CallbackQueryHandler(sup_done,     pattern=r"^sup_done:\d+$"),
         CallbackQueryHandler(lambda u, c: u.callback_query.answer(), pattern=r"^noop$"),
-        MessageHandler(filters.ALL & ~filters.COMMAND, relay_message),
     ]
+
+
+def get_relay_handler():
+    return MessageHandler(filters.ALL & ~filters.COMMAND, relay_message)
