@@ -1,5 +1,6 @@
 import logging
 import os
+from telegram import BotCommand
 from telegram.ext import Application
 
 from database.db import init_db
@@ -14,6 +15,10 @@ logger = logging.getLogger(__name__)
 
 async def post_init(app):
     await init_db()
+    await app.bot.set_my_commands([
+        BotCommand("start", "بدء البوت"),
+        BotCommand("cancel", "إلغاء العملية الحالية"),
+    ])
     logger.info("✅ قاعدة البيانات جاهزة")
 
 
@@ -29,8 +34,7 @@ def main():
         .build()
     )
 
-    # ── الترتيب مهم جداً ──────────────────────────
-    # group=0 : Relay chat (أعلى أولوية — قبل كل حاجة)
+    # group=0 : Relay chat (أعلى أولوية)
     app.add_handler(order_actions.get_relay_handler(), group=0)
 
     # group=1 : Admin panel
