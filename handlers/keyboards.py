@@ -19,17 +19,43 @@ async def main_menu_kb() -> ReplyKeyboardMarkup:
     myops   = await get_button_label("myops")
     support = await get_button_label("support")
 
-    rows = [
-        [KeyboardButton(dep), KeyboardButton(wit)],
-        [KeyboardButton(tote)],
-        [KeyboardButton(proofs), KeyboardButton(myops)],
-        [KeyboardButton(support)],
-    ]
-
-    # أزرار مخصصة إضافية
+    # الأزرار المخصصة مرتبة بالـ position
     custom = await get_custom_buttons()
-    for btn in custom:
-        rows.append([KeyboardButton(btn[1])])
+
+    def custom_at(pos):
+        return [KeyboardButton(b[1]) for b in custom if b[3] == pos]
+
+    rows = []
+
+    # position 0 = قبل كل شيء
+    if custom_at(0):
+        rows.append(custom_at(0))
+
+    rows.append([KeyboardButton(dep), KeyboardButton(wit)])
+
+    # position 1 = بعد الإيداع والسحب
+    if custom_at(1):
+        rows.append(custom_at(1))
+
+    rows.append([KeyboardButton(tote)])
+
+    # position 2 = بعد tote
+    if custom_at(2):
+        rows.append(custom_at(2))
+
+    rows.append([KeyboardButton(proofs), KeyboardButton(myops)])
+
+    # position 3 = بعد الإثباتات وعملياتي
+    if custom_at(3):
+        rows.append(custom_at(3))
+
+    rows.append([KeyboardButton(support)])
+
+    # position 4 = في الآخر (الافتراضي)
+    if custom_at(4) or [b for b in custom if b[3] not in (0,1,2,3,4)]:
+        remaining = [KeyboardButton(b[1]) for b in custom if b[3] not in (0,1,2,3)]
+        if remaining:
+            rows.append(remaining)
 
     return ReplyKeyboardMarkup(rows, resize_keyboard=True)
 

@@ -159,6 +159,11 @@ async def order_done(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("⚠️ الطلب غير موجود.")
         return
 
+    # تحقق إن المشرف هو نفس اللي قبل الطلب
+    if order[9] and order[9] != admin.id:
+        await query.answer("🔒 هذا الطلب قيد المعالجة من قِبل مشرف آخر، لا يمكنك التدخل فيه.", show_alert=True)
+        return
+
     await update_order(order_id, status="completed", accepted_by=admin.id)
     user_id = order[5]
     otype = "إيداع" if order[1] == "deposit" else "سحب"
@@ -200,17 +205,33 @@ async def order_done(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def order_reject_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    if not await is_admin(query.from_user.id):
+    admin = query.from_user
+    if not await is_admin(admin.id):
         await query.answer("⛔ غير مصرح.", show_alert=True)
         return
 
-    await query.answer()
     parts = query.data.split(":")
-    ctx.user_data["reject_order_id"] = int(parts[1])
-    ctx.user_data["reject_type"] = parts[0].replace("_reject", "")  # dep / wit / sup
+    order_id = int(parts[1])
+    rtype = parts[0].replace("_reject", "")
+
+    # تحقق إن المشرف هو نفس اللي قبل الطلب
+    if rtype != "sup":
+        order = await get_order(order_id)
+        if order and order[9] and order[9] != admin.id:
+            await query.answer("🔒 هذا الطلب قيد المعالجة من قِبل مشرف آخر، لا يمكنك التدخل فيه.", show_alert=True)
+            return
+    else:
+        req = await get_support_request(order_id)
+        if req and req[5] and req[5] != admin.id:
+            await query.answer("🔒 هذا الطلب قيد المعالجة من قِبل مشرف آخر، لا يمكنك التدخل فيه.", show_alert=True)
+            return
+
+    await query.answer()
+    ctx.user_data["reject_order_id"] = order_id
+    ctx.user_data["reject_type"] = rtype
 
     await query.get_bot().send_message(
-        query.from_user.id,
+        admin.id,
         "📝 يرجى كتابة سبب الرفض:",
         reply_markup=InlineKeyboardMarkup([
             [InlineKeyboardButton("الغاء 🚫", callback_data="reject_cancel")]
@@ -356,6 +377,11 @@ async def sup_done(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     req_id = int(query.data.split(":")[1])
     req = await get_support_request(req_id)
     if not req:
+        return
+
+    # تحقق إن المشرف هو نفس اللي قبل الطلب
+    if req[5] and req[5] != admin.id:
+        await query.answer("🔒 هذا الطلب قيد المعالجة من قِبل مشرف آخر، لا يمكنك التدخل فيه.", show_alert=True)
         return
 
     await update_support_request(req_id, status="completed")

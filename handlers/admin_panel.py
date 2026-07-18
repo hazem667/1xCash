@@ -24,6 +24,13 @@ from states.states import (
 
 CANCEL_TEXT = "/cancel"
 
+async def _cancel_conv(update, ctx):
+    if update.message:
+        await update.message.reply_text("❌ تم الإلغاء.", reply_markup=admin_menu_kb())
+    return ConversationHandler.END
+
+
+
 
 # ══════════════════════════════════════════════
 # /admin COMMAND
@@ -113,21 +120,27 @@ async def show_logs(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 async def broadcast_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not await is_admin(update.effective_user.id):
         return
-    await update.message.reply_text("📣 أرسل الرسالة التي تريد إذاعتها:\n(اكتب /cancel للإلغاء)")
+    await update.message.reply_text(
+        "📣 أرسل الرسالة التي تريد إذاعتها:\n"
+        "سيتم إضافة *📢 إشعار من 1xCash:* تلقائياً في البداية.\n"
+        "(اكتب /cancel للإلغاء)",
+        parse_mode="Markdown"
+    )
     return ADM_BROADCAST
 
 
 async def broadcast_send(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    if update.message.text == CANCEL_TEXT:
-        await update.message.reply_text("تم الإلغاء.", reply_markup=admin_menu_kb())
+    if update.message.text and update.message.text.strip() == CANCEL_TEXT:
+        await update.message.reply_text("❌ تم إلغاء الإذاعة.", reply_markup=admin_menu_kb())
         return ConversationHandler.END
 
     users = await get_all_users()
     bot = update.get_bot()
     success = 0
+    broadcast_text = f"📢 إشعار من 1xCash:\n\n{update.message.text or ''}"
     for uid in users:
         try:
-            await bot.copy_message(uid, update.message.chat_id, update.message.message_id)
+            await bot.send_message(uid, broadcast_text, parse_mode="Markdown")
             success += 1
         except Exception:
             pass
@@ -441,7 +454,7 @@ def get_handlers():
     broadcast_conv = ConversationHandler(
         entry_points=[MessageHandler(filters.Regex("^📣 إذاعة$"), broadcast_start)],
         states={ADM_BROADCAST: [MessageHandler(filters.ALL, broadcast_send)]},
-        fallbacks=[],
+        fallbacks=[CommandHandler("cancel", _cancel_conv)],
         per_user=True, allow_reentry=True, name="broadcast_conv",
     )
 
@@ -451,7 +464,7 @@ def get_handlers():
             ADM_EDIT_MSG_KEY: [CallbackQueryHandler(edit_msg_select, pattern=r"^editm:")],
             ADM_EDIT_MSG_VAL: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_msg_save)],
         },
-        fallbacks=[],
+        fallbacks=[CommandHandler("cancel", _cancel_conv)],
         per_user=True, allow_reentry=True, name="edit_msg_conv",
     )
 
@@ -468,7 +481,7 @@ def get_handlers():
             ADM_ADD_CUSTOM_LABEL: [MessageHandler(filters.TEXT & ~filters.COMMAND, btn_add_custom_label)],
             ADM_ADD_CUSTOM_URL: [MessageHandler(filters.TEXT & ~filters.COMMAND, btn_add_custom_url)],
         },
-        fallbacks=[],
+        fallbacks=[CommandHandler("cancel", _cancel_conv)],
         per_user=True, allow_reentry=True, name="edit_btn_conv",
     )
 
@@ -478,21 +491,21 @@ def get_handlers():
             ADM_EDIT_SETTING_KEY: [CallbackQueryHandler(setting_select, pattern=r"^sets:")],
             ADM_EDIT_SETTING_VAL: [MessageHandler(filters.TEXT & ~filters.COMMAND, setting_save)],
         },
-        fallbacks=[],
+        fallbacks=[CommandHandler("cancel", _cancel_conv)],
         per_user=True, allow_reentry=True, name="settings_conv",
     )
 
     add_admin_conv = ConversationHandler(
         entry_points=[MessageHandler(filters.Regex("^👤 تعيين مشرف$"), add_admin_start)],
         states={ADM_ADD_ADMIN: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_admin_save)]},
-        fallbacks=[],
+        fallbacks=[CommandHandler("cancel", _cancel_conv)],
         per_user=True, allow_reentry=True, name="add_admin_conv",
     )
 
     remove_admin_conv = ConversationHandler(
         entry_points=[MessageHandler(filters.Regex("^❌ إزالة مشرف$"), remove_admin_start)],
         states={ADM_REMOVE_ADMIN: [CallbackQueryHandler(remove_admin_confirm, pattern=r"^rmadm:\d+$")]},
-        fallbacks=[],
+        fallbacks=[CommandHandler("cancel", _cancel_conv)],
         per_user=True, allow_reentry=True, name="remove_admin_conv",
     )
 

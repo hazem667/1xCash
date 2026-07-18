@@ -126,11 +126,21 @@ async def dep_cancel_order(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     order_id = int(query.data.split(":")[1])
     order = await get_order(order_id)
-    if not order or order[7] != "pending":
-        await query.edit_message_text("⚠️ لا يمكن إلغاء هذا الطلب.")
+
+    if not order:
+        await query.edit_message_text("⚠️ الطلب غير موجود.")
+        return ConversationHandler.END
+
+    if order[8] != "pending":
+        await query.edit_message_text(
+            "⚠️ لا يمكن إلغاء الطلب.\n"
+            "إما أنه قيد المعالجة من مشرف أو تم تنفيذه بالفعل."
+        )
         return ConversationHandler.END
 
     await update_order(order_id, status="cancelled")
+
+    # حذف رسائل الإدارة
     if order[11]:
         try:
             for admin_id, msg_id in json.loads(order[11]).items():
