@@ -14,15 +14,31 @@ from handlers.utils import make_mention, now_str, broadcast_to_admins
 from states.states import WIT_PLATFORM, WIT_AMOUNT, WIT_CONFIRM
 
 
+async def _go_main(target_id, bot, text="🏠 تم الإلغاء."):
+    kb = await main_menu_kb()
+    await bot.send_message(target_id, text, reply_markup=kb)
+
+
+async def wit_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    try:
+        await query.edit_message_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+    ctx.user_data.clear()
+    await _go_main(query.from_user.id, query.get_bot())
+    return ConversationHandler.END
+
+
 async def wit_platform(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     user = query.from_user
-
     if await get_setting("maintenance_mode") == "1" and not await is_admin(user.id):
         await query.answer("🔧 البوت في وضع الصيانة.", show_alert=True)
         return ConversationHandler.END
     if await get_setting("withdraw_enabled") == "0":
-        await query.answer("⚠️ خدمة السحب غير متاحة حالياً.", show_alert=True)
+        await query.answer("⚠️ خدمة السحب غير متاحة.", show_alert=True)
         return ConversationHandler.END
 
     await query.answer()
@@ -33,7 +49,8 @@ async def wit_platform(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
     ask = await get_message("withdraw_ask_amount")
     await query.edit_message_text(ask, reply_markup=InlineKeyboardMarkup([
-        [InlineKeyboardButton("رجوع 🔙", callback_data="wit_back_platform")]
+        [InlineKeyboardButton("رجوع 🔙", callback_data="wit_back_platform"),
+         InlineKeyboardButton("الغاء 🚫", callback_data="cancel")]
     ]))
     return WIT_AMOUNT
 
@@ -115,42 +132,32 @@ async def wit_cancel_order(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
     cancelled_msg = await get_message("order_cancelled_user")
     await query.edit_message_text(cancelled_msg)
-    kb = await main_menu_kb()
-    await query.get_bot().send_message(query.from_user.id, "🏠 القائمة الرئيسية:", reply_markup=kb)
-    return ConversationHandler.END
-
-
-async def wit_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    try:
-        await query.delete_message()
-    except Exception:
-        pass
-    kb = await main_menu_kb()
-    await query.get_bot().send_message(query.from_user.id, "🏠 تم الإلغاء.", reply_markup=kb)
-    ctx.user_data.clear()
+    await _go_main(query.from_user.id, query.get_bot(), "🏠 القائمة الرئيسية:")
     return ConversationHandler.END
 
 
 def get_handler():
+    cancel_cb = CallbackQueryHandler(wit_cancel, pattern=r"^cancel$")
     return ConversationHandler(
         entry_points=[CallbackQueryHandler(wit_platform, pattern=r"^wit_plat:")],
         states={
             WIT_PLATFORM: [
                 CallbackQueryHandler(wit_back_platform, pattern=r"^wit_back_platform$"),
+                cancel_cb,
             ],
             WIT_AMOUNT: [
                 CallbackQueryHandler(wit_back_platform, pattern=r"^wit_back_platform$"),
+                cancel_cb,
                 MessageHandler(filters.TEXT & ~filters.COMMAND, wit_amount),
             ],
             WIT_CONFIRM: [
                 CallbackQueryHandler(wit_cancel_order, pattern=r"^wit_cancel:\d+$"),
+                cancel_cb,
             ],
         },
         fallbacks=[
             CommandHandler("start", lambda u, c: ConversationHandler.END),
-            CallbackQueryHandler(wit_cancel, pattern=r"^cancel$"),
+            cancel_cb,
         ],
         per_user=True,
         allow_reentry=True,

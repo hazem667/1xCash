@@ -14,26 +14,33 @@ from handlers.utils import make_mention, now_str, broadcast_to_admins
 from states.states import DEP_PLATFORM, DEP_ACCOUNT_ID, DEP_AMOUNT, DEP_CONFIRM
 
 
-async def dep_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    if await get_setting("maintenance_mode") == "1" and not await is_admin(user.id):
-        await update.message.reply_text("🔧 البوت في وضع الصيانة.")
-        return ConversationHandler.END
-    if await get_setting("deposit_enabled") == "0":
-        await update.message.reply_text("⚠️ خدمة الإيداع غير متاحة حالياً.")
-        return ConversationHandler.END
+async def _go_main(target_id, bot, text="🏠 تم الإلغاء."):
+    kb = await main_menu_kb()
+    await bot.send_message(target_id, text, reply_markup=kb)
 
-    await update.message.chat.send_action(ChatAction.TYPING)
-    mention = make_mention(user)
-    template = await get_message("deposit_intro")
-    text = template.replace("{mention}", mention)
-    kb = await deposit_platform_kb()
-    await update.message.reply_text(text, reply_markup=kb)
-    return DEP_PLATFORM
+
+async def dep_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    try:
+        await query.edit_message_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+    ctx.user_data.clear()
+    await _go_main(query.from_user.id, query.get_bot())
+    return ConversationHandler.END
 
 
 async def dep_platform(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
+    user = query.from_user
+    if await get_setting("maintenance_mode") == "1" and not await is_admin(user.id):
+        await query.answer("🔧 البوت في وضع الصيانة.", show_alert=True)
+        return ConversationHandler.END
+    if await get_setting("deposit_enabled") == "0":
+        await query.answer("⚠️ خدمة الإيداع غير متاحة.", show_alert=True)
+        return ConversationHandler.END
+
     await query.answer()
     await query.message.chat.send_action(ChatAction.TYPING)
     plat_key = query.data.split(":")[1]
@@ -43,7 +50,8 @@ async def dep_platform(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     ask = await get_message("deposit_ask_id")
     text = ask.replace("{platform}", platform_name)
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup([
-        [InlineKeyboardButton("رجوع 🔙", callback_data="dep_back_platform")]
+        [InlineKeyboardButton("رجوع 🔙", callback_data="dep_back_platform"),
+         InlineKeyboardButton("الغاء 🚫", callback_data="cancel")]
     ]))
     return DEP_ACCOUNT_ID
 
@@ -64,7 +72,8 @@ async def dep_account_id(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     ctx.user_data["dep_account_id"] = update.message.text.strip()
     ask = await get_message("deposit_ask_amount")
     await update.message.reply_text(ask, reply_markup=InlineKeyboardMarkup([
-        [InlineKeyboardButton("رجوع 🔙", callback_data="dep_back_id")]
+        [InlineKeyboardButton("رجوع 🔙", callback_data="dep_back_id"),
+         InlineKeyboardButton("الغاء 🚫", callback_data="cancel")]
     ]))
     return DEP_AMOUNT
 
@@ -76,7 +85,8 @@ async def dep_back_id(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     ask = await get_message("deposit_ask_id")
     text = ask.replace("{platform}", platform)
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup([
-        [InlineKeyboardButton("رجوع 🔙", callback_data="dep_back_platform")]
+        [InlineKeyboardButton("رجوع 🔙", callback_data="dep_back_platform"),
+         InlineKeyboardButton("الغاء 🚫", callback_data="cancel")]
     ]))
     return DEP_ACCOUNT_ID
 
@@ -88,7 +98,6 @@ async def dep_amount(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         return DEP_AMOUNT
 
     await update.message.chat.send_action(ChatAction.TYPING)
-    ctx.user_data["dep_amount"] = text
     user = update.effective_user
     mention = make_mention(user)
     platform = ctx.user_data.get("dep_platform", "")
@@ -99,7 +108,6 @@ async def dep_amount(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         account_id=account_id, amount=text,
         user_id=user.id, user_mention=mention, user_full_name=user.full_name,
     )
-    ctx.user_data["dep_order_id"] = order_id
 
     sent_msg = await get_message("deposit_sent")
     await update.message.reply_text(sent_msg, reply_markup=dep_cancel_order_kb(order_id))
@@ -139,8 +147,6 @@ async def dep_cancel_order(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         return ConversationHandler.END
 
     await update_order(order_id, status="cancelled")
-
-    # حذف رسائل الإدارة
     if order[11]:
         try:
             for admin_id, msg_id in json.loads(order[11]).items():
@@ -153,43 +159,34 @@ async def dep_cancel_order(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
     cancelled_msg = await get_message("order_cancelled_user")
     await query.edit_message_text(cancelled_msg)
-    kb = await main_menu_kb()
-    await query.get_bot().send_message(query.from_user.id, "🏠 القائمة الرئيسية:", reply_markup=kb)
-    return ConversationHandler.END
-
-
-async def dep_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    try:
-        await query.delete_message()
-    except Exception:
-        pass
-    kb = await main_menu_kb()
-    await query.get_bot().send_message(query.from_user.id, "🏠 تم الإلغاء.", reply_markup=kb)
-    ctx.user_data.clear()
+    await _go_main(query.from_user.id, query.get_bot(), "🏠 القائمة الرئيسية:")
     return ConversationHandler.END
 
 
 def get_handler():
+    cancel_cb = CallbackQueryHandler(dep_cancel, pattern=r"^cancel$")
     return ConversationHandler(
         entry_points=[CallbackQueryHandler(dep_platform, pattern=r"^dep_plat:")],
         states={
+            DEP_PLATFORM: [cancel_cb],
             DEP_ACCOUNT_ID: [
                 CallbackQueryHandler(dep_back_platform, pattern=r"^dep_back_platform$"),
+                cancel_cb,
                 MessageHandler(filters.TEXT & ~filters.COMMAND, dep_account_id),
             ],
             DEP_AMOUNT: [
                 CallbackQueryHandler(dep_back_id, pattern=r"^dep_back_id$"),
+                cancel_cb,
                 MessageHandler(filters.TEXT & ~filters.COMMAND, dep_amount),
             ],
             DEP_CONFIRM: [
                 CallbackQueryHandler(dep_cancel_order, pattern=r"^dep_cancel:\d+$"),
+                cancel_cb,
             ],
         },
         fallbacks=[
             CommandHandler("start", lambda u, c: ConversationHandler.END),
-            CallbackQueryHandler(dep_cancel, pattern=r"^cancel$"),
+            cancel_cb,
         ],
         per_user=True,
         allow_reentry=True,

@@ -12,7 +12,6 @@ async def myops_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     label = await get_button_label("myops")
     if update.message.text != label:
         return
-    ctx.user_data["myops_page"] = 0
     await _show_myops(update.effective_user.id, 0, update, ctx)
 
 
@@ -20,7 +19,6 @@ async def myops_page(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     page = int(query.data.split(":")[1])
-    ctx.user_data["myops_page"] = page
     await _show_myops(query.from_user.id, page, update, ctx, edit=True)
 
 
@@ -34,9 +32,8 @@ async def _show_myops(user_id, page, update, ctx, edit=False):
         lines = [f"📋 *عملياتي* — الصفحة {page+1}\n"]
         for r in rows:
             order_id, otype, platform, amount, status, created_at = r
-            icon = status_icon(status)
             lines.append(
-                f"• `#{order_id}` {order_type_ar(otype)} | {platform or ''} | {amount} | {icon}\n"
+                f"• `#{order_id}` {order_type_ar(otype)} | {platform or ''} | {amount} | {status_icon(status)}\n"
                 f"  🕒 {created_at[:16]}"
             )
         text = "\n".join(lines)
@@ -50,6 +47,5 @@ async def _show_myops(user_id, page, update, ctx, edit=False):
 
 def get_handlers():
     return [
-        MessageHandler(filters.TEXT & ~filters.COMMAND, myops_start),
         CallbackQueryHandler(myops_page, pattern=r"^myops_page:\d+$"),
     ]
